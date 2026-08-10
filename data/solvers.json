@@ -113,6 +113,12 @@
       "reported_version": "1.1.0",
       "status": "ok",
       "version": "1.1.0"
+    },
+    {
+      "error": "ERROR: Could not find a version that satisfies the requirement maraboupy (from versions: none)\nERROR: No matching distribution found for maraboupy",
+      "id": "marabou",
+      "status": "install_failed",
+      "version": "1.1.0"
     }
   ]
 }
