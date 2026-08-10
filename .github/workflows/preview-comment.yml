@@ -1,0 +1,68 @@
+name: "Preview: post comment"
+
+# Reacts to preview-collect.yml finishing. Runs in the base repo's trusted
+# context, so this is the only one of the two workflows allowed to hold a
+# write-scoped token. It never executes anything from the pull request
+# itself — it only reads the artifact the other workflow already produced.
+
+on:
+  workflow_run:
+    workflows: ["Preview: collect capabilities"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the result from the triggering run
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          run_id: ${{ github.event.workflow_run.id }}
+          name: preview-result
+          path: preview-out
+
+      - name: Post or update the PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = parseInt(fs.readFileSync('preview-out/pr_number.txt', 'utf8').trim());
+            const results = fs.readFileSync('preview-out/results.jsonl', 'utf8');
+
+            const body = [
+              '**Capabilities collected from this PR**',
+              '',
+              '```json',
+              results.trim(),
+              '```',
+              '',
+              '_Installed in an isolated environment and discarded. Nothing here is committed until this PR is merged._'
+            ].join('\n');
+
+            const marker = '<!-- vnnlib-preview-comment -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: `${marker}\n${body}`,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `${marker}\n${body}`,
+              });
+            }

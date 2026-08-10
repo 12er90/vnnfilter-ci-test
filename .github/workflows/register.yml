@@ -1,0 +1,80 @@
+name: Register solver capabilities
+
+# Runs after a solver submission is merged to main. Installs it for real,
+# records what it reports, and commits the result. Split into two jobs so
+# the job that executes the submitted install.sh never holds a write token —
+# same reasoning as preview-collect.yml / preview-comment.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'solvers/**/install.sh'
+
+concurrency:
+  group: register
+  cancel-in-progress: false   # process merges in order, never drop one
+
+jobs:
+  collect:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    outputs:
+      has_results: ${{ steps.check.outputs.has_results }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need the previous commit to diff against
+
+      - name: Find solvers changed by this push
+        id: changed
+        uses: tj-actions/changed-files@v44
+        with:
+          files: solvers/**/install.sh
+
+      - name: Install and query each changed solver
+        run: |
+          mkdir -p register-out
+          for f in ${{ steps.changed.outputs.all_changed_files }}; do
+            dir=$(dirname "$f")
+            echo "registering: $dir"
+            python3 scripts/register.py "$dir" >> register-out/results.jsonl
+          done
+
+      - id: check
+        run: echo "has_results=$( [ -s register-out/results.jsonl ] && echo true || echo false )" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.check.outputs.has_results == 'true'
+        with:
+          name: register-result
+          path: register-out/
+
+  commit:
+    needs: collect
+    if: needs.collect.outputs.has_results == 'true'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: register-result
+          path: register-out
+
+      - name: Merge results into the database
+        run: python3 scripts/build_db.py data/solvers.json register-out/results.jsonl
+
+      - name: Commit and push
+        run: |
+          git config user.name "vnnlib-registry-bot"
+          git config user.email "actions@github.com"
+          git add data/solvers.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Register: update capabilities [skip ci]"
+          git push

@@ -1,0 +1,47 @@
+name: "Preview: collect capabilities"
+
+# Runs on every PR that touches a solver's install script. Installs it in an
+# isolated environment, asks it what it supports, and hands the result off as
+# an artifact. Never touches the repository, never carries a write token —
+# see preview-comment.yml for why.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'solvers/**/install.sh'
+
+concurrency:
+  group: preview-collect-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find changed solver directories
+        id: changed
+        uses: tj-actions/changed-files@v44
+        with:
+          files: solvers/**/install.sh
+
+      - name: Install and query each changed solver
+        run: |
+          mkdir -p preview-out
+          echo '${{ github.event.pull_request.number }}' > preview-out/pr_number.txt
+          for f in ${{ steps.changed.outputs.all_changed_files }}; do
+            dir=$(dirname "$f")
+            echo "collecting: $dir"
+            python3 scripts/register.py "$dir" >> preview-out/results.jsonl
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: preview-result
+          path: preview-out/
+          retention-days: 7
