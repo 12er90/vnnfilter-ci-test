@@ -1,5 +1,118 @@
 {
-    "schema_version": "1.0",
-    "generated_at": "2026-08-10T00:00:00Z",
-    "solvers": []
+  "generated_at": "2026-08-10T00:00:00Z",
+  "schema_version": "1.0",
+  "solvers": [
+    {
+      "capabilities": {
+        "arithmetic_complexity_theories": [
+          "BND",
+          "OUTC",
+          "LIN",
+          "POLY"
+        ],
+        "hidden_node_theories": [
+          "NH"
+        ],
+        "multiple_input_output_theories": [
+          "SIO"
+        ],
+        "multiple_network_theories": [
+          "SNET",
+          "MENET",
+          "MINET"
+        ],
+        "multiple_node_comparison_theories": [
+          "SNC"
+        ],
+        "onnx_element_types": [
+          "real",
+          "float32 * bounds computed in real arithmetic, not IEEE-754-faithful",
+          "float64 * bounds computed in real arithmetic, not IEEE-754-faithful"
+        ],
+        "onnx_operators": [
+          "Add",
+          "ArgMax",
+          "AveragePool",
+          "BatchNormalization",
+          "Cast",
+          "Clip",
+          "Concat",
+          "ConstantOfShape",
+          "Conv",
+          "ConvTranspose",
+          "Cos",
+          "Div",
+          "Dropout",
+          "Equal",
+          "Expand",
+          "Flatten",
+          "Floor",
+          "Gather",
+          "Gemm",
+          "Identity",
+          "LeakyRelu",
+          "MatMul",
+          "Max",
+          "MaxPool",
+          "Min",
+          "Mul",
+          "Neg",
+          "PWLLookup",
+          "Pad",
+          "Pow",
+          "ReduceMean",
+          "ReduceSum",
+          "Relu",
+          "Reshape",
+          "Resize",
+          "ScatterND",
+          "Shape",
+          "Sigmoid",
+          "Sign",
+          "Sin",
+          "Slice",
+          "Softmax",
+          "Split",
+          "SplitOutput",
+          "Squeeze",
+          "Sub",
+          "Tanh",
+          "Transpose",
+          "Unsqueeze",
+          "Upsample",
+          "Where"
+        ],
+        "onnx_opset_versions": [
+          "8",
+          "20"
+        ],
+        "optimised_disjunctive_reasoning": [
+          "true"
+        ],
+        "serialise_assignments": [
+          "true"
+        ],
+        "vnnlib_versions": [
+          "1.0",
+          "2.0"
+        ]
+      },
+      "id": "vibecheck",
+      "partial_support": {
+        "arithmetic_complexity_theories": {
+          "POLY": "polynomial constraints transpiled via nonlinear-augment"
+        },
+        "multiple_input_output_theories": {
+          "SIO": "multi-input models run only through the attack-only quantized-surrogate handler (sat/timeout, never unsat)"
+        },
+        "multiple_network_theories": {
+          "MINET": "two-network pairs only"
+        }
+      },
+      "reported_name": "vibecheck",
+      "reported_version": "1.1.0",
+      "status": "ok",
+      "version": "1.1.0"
+    }
+  ]
 }
