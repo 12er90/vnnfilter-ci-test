@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Minimal stand-in for the real register.py — CI-wiring test only.
+"""Stand-in for the real register.py — CI-wiring test, extended to actually
+call the `supports` interface (Section 5.4) instead of just --name/--version.
 
-Installs one solvers/<id>/<version> directory in an isolated venv, asks
---name and --version, and prints one JSON line. Enough to prove the
-GitHub Actions plumbing works; not the real vnnfilter collection logic.
+Still simplified relative to the real pipeline: theory fields are split into
+identifier + note on ' * ' (vibecheck's own partial-support notation, not
+part of the standard), but onnx-operators and the two boolean flags are kept
+as raw lines rather than parsed, since their exact real-world formatting
+hasn't been inspected from a live run yet. Don't assert a schema for output
+nobody has actually seen.
 """
 import json
 import os
@@ -14,9 +18,46 @@ import tempfile
 import venv
 from pathlib import Path
 
+SUPPORTS_FLAGS = [
+    "--onnx-opset-versions",
+    "--onnx-element-types",
+    "--onnx-operators",
+    "--vnnlib-versions",
+    "--hidden-node-theories",
+    "--multiple-input-output-theories",
+    "--multiple-network-theories",
+    "--multiple-node-comparison-theories",
+    "--arithmetic-complexity-theories",
+    "--optimised-disjunctive-reasoning",
+    "--serialise-assignments",
+]
+
+# Flags whose output is a theory-identifier list and may carry vibecheck's
+# "IDENT * note" partial-support suffix.
+THEORY_FLAGS = {
+    "--hidden-node-theories",
+    "--multiple-input-output-theories",
+    "--multiple-network-theories",
+    "--multiple-node-comparison-theories",
+    "--arithmetic-complexity-theories",
+}
+
 
 def bin_dir(root: Path) -> Path:
     return root / ("Scripts" if os.name == "nt" else "bin")
+
+
+def run(binary, *args):
+    proc = subprocess.run([binary, *args], capture_output=True, text=True, timeout=30)
+    return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+
+
+def split_theory_line(line):
+    """'POLY * some note' -> ('POLY', 'some note'); 'POLY' -> ('POLY', None)."""
+    if " * " in line:
+        ident, note = line.split(" * ", 1)
+        return ident.strip(), note.strip()
+    return line.strip(), None
 
 
 def main():
@@ -58,12 +99,52 @@ def main():
             }))
             return 0
 
-        name = subprocess.run([binary, "--name"], capture_output=True, text=True).stdout.strip()
-        ver = subprocess.run([binary, "--version"], capture_output=True, text=True).stdout.strip()
-        print(json.dumps({
-            "id": solver_id, "version": version, "status": "ok",
+        errors = []
+        _, name, err = run(binary, "--name")
+        if err:
+            errors.append(f"--name: {err[:200]}")
+        _, ver, err = run(binary, "--version")
+        if err:
+            errors.append(f"--version: {err[:200]}")
+
+        capabilities = {}
+        partial_support = {}
+        for flag in SUPPORTS_FLAGS:
+            rc, out, err = run(binary, "supports", flag)
+            key = flag.lstrip("-").replace("-", "_")
+            if rc != 0:
+                capabilities[key] = None
+                errors.append(f"supports {flag}: exited {rc}: {err[:200]}")
+                continue
+
+            lines = [l for l in out.splitlines() if l.strip()]
+            if flag in THEORY_FLAGS:
+                idents, notes = [], {}
+                for line in lines:
+                    ident, note = split_theory_line(line)
+                    idents.append(ident)
+                    if note:
+                        notes[ident] = note
+                capabilities[key] = idents
+                if notes:
+                    partial_support[key] = notes
+            else:
+                # Not yet parsed into a strict shape — raw lines only,
+                # until real output has been inspected.
+                capabilities[key] = lines
+
+        status = "ok" if not errors else "incomplete"
+        record = {
+            "id": solver_id, "version": version, "status": status,
             "reported_name": name, "reported_version": ver,
-        }))
+            "capabilities": capabilities,
+        }
+        if partial_support:
+            record["partial_support"] = partial_support
+        if errors:
+            record["errors"] = errors
+
+        print(json.dumps(record))
         return 0
     finally:
         shutil.rmtree(work, ignore_errors=True)
